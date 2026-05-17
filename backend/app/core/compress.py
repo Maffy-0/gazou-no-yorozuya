@@ -1,6 +1,7 @@
 import base64
 import io
 import re
+import warnings
 from pathlib import Path
 from typing import Literal
 
@@ -33,6 +34,9 @@ PNG_COMPRESS_LEVELS: dict[QualityPreset, int] = {
     "low": 9,
 }
 
+MAX_IMAGE_PIXELS = 40_000_000
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
 
 class UnsupportedImageError(ValueError):
     pass
@@ -49,8 +53,12 @@ def compress_image(
     quality: QualityPreset,
 ) -> dict:
     try:
-        image = Image.open(io.BytesIO(image_bytes))
-        image.load()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            image = Image.open(io.BytesIO(image_bytes))
+            image.load()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise InvalidImageError("画像の解像度が大きすぎます。40MP以下の画像を選択してください。") from exc
     except (OSError, UnidentifiedImageError) as exc:
         raise InvalidImageError("画像ファイルとして読み込めません。") from exc
 

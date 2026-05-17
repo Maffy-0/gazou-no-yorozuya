@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local application data
+backend/data/*.sqlite3
+backend/data/*.sqlite3-*
+backend/data/exported/
