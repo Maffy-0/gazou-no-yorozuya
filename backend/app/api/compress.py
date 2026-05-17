@@ -1,24 +1,32 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from app.core.compress import compress_jpeg
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from app.core.compress import (
+    InvalidImageError,
+    QualityPreset,
+    ResolutionPreset,
+    UnsupportedImageError,
+    compress_image as compress_image_core,
+)
 
 router = APIRouter(prefix="/api")
+
 
 @router.post("/compress")
 async def compress_image(
     file: UploadFile = File(...),
-    quality: int = Query(50, ge=1, le=100) # フロントから画質設定も受け取れるように拡張
+    resolution: ResolutionPreset = Form("original"),
+    quality: QualityPreset = Form("medium"),
 ):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="画像ファイルではありません。")
-        
+    request_object_content = await file.read()
+
     try:
-        request_object_content = await file.read()
-        
-        # 🔥 アルゴリズムの処理を丸投げ
-        compressed_io = compress_jpeg(request_object_content, quality=quality)
-        
-        return StreamingResponse(compressed_io, media_type="image/jpeg")
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"処理エラー: {str(e)}")
+        return compress_image_core(
+            image_bytes=request_object_content,
+            file_name=file.filename or "image",
+            resolution=resolution,
+            quality=quality,
+        )
+    except (InvalidImageError, UnsupportedImageError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"処理エラー: {str(exc)}") from exc
